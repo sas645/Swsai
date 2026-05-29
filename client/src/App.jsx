@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { deleteDocument, fetchDocuments, uploadDocumentWithMeta } from './api';
+import {
+  deleteDocument,
+  fetchDocuments,
+  fetchNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  uploadDocumentWithMeta,
+} from './api';
 import DocumentCard from './components/DocumentCard';
+import NotificationCenter from './components/NotificationCenter';
 import NotificationToast from './components/NotificationToast';
 import UploadZone from './components/UploadZone';
 import UploadQueue from './components/UploadQueue';
@@ -25,6 +33,8 @@ export default function App() {
   const [deletingId, setDeletingId] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [connected, setConnected] = useState(false);
+  const [systemUnread, setSystemUnread] = useState(0);
+  const [systemNotifications, setSystemNotifications] = useState([]);
 
   const addNotification = useCallback((title, message, type = 'success') => {
     const id = ++notificationId;
@@ -52,6 +62,16 @@ export default function App() {
       addNotification('Processing complete', payload.message);
     },
     onDeleted: ({ id }) => setDocuments((prev) => prev.filter((d) => d.id !== id)),
+    onNotificationsSync: (payload) => {
+      setSystemUnread(payload.unread || 0);
+      setSystemNotifications(payload.notifications || []);
+    },
+    onNotificationCreated: (n) => {
+      setSystemNotifications((prev) => [n, ...prev]);
+      setSystemUnread((u) => u + (n.read ? 0 : 1));
+      // Also show a toast for important system notifications.
+      addNotification('Notification', n.message, n.type === 'error' ? 'info' : 'success');
+    },
   });
 
   useEffect(() => {
@@ -60,6 +80,20 @@ export default function App() {
       .catch(() => addNotification('Error', 'Could not load documents.', 'info'))
       .finally(() => setLoading(false));
   }, [addNotification]);
+
+  const refreshSystemNotifications = useCallback(async () => {
+    try {
+      const data = await fetchNotifications(50);
+      setSystemUnread(data.unread || 0);
+      setSystemNotifications(data.notifications || []);
+    } catch {
+      addNotification('Error', 'Could not load notifications.', 'info');
+    }
+  }, [addNotification]);
+
+  useEffect(() => {
+    refreshSystemNotifications();
+  }, [refreshSystemNotifications]);
 
   const handleUploadFiles = async (files) => {
     const selected = Array.from(files || []);
@@ -154,9 +188,26 @@ export default function App() {
             <p>Company PDF library & processing</p>
           </div>
         </div>
-        <div className="header__status">
-          <span className={`status-dot ${connected ? 'status-dot--on' : ''}`} />
-          {connected ? 'Live updates' : 'Connecting…'}
+        <div className="header__right">
+          <NotificationCenter
+            unread={systemUnread}
+            notifications={systemNotifications}
+            onRefresh={refreshSystemNotifications}
+            onMarkRead={async (id) => {
+              await markNotificationRead(id);
+              setSystemNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+              setSystemUnread((u) => Math.max(0, u - 1));
+            }}
+            onMarkAllRead={async () => {
+              await markAllNotificationsRead();
+              setSystemNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+              setSystemUnread(0);
+            }}
+          />
+          <div className="header__status">
+            <span className={`status-dot ${connected ? 'status-dot--on' : ''}`} />
+            {connected ? 'Live updates' : 'Connecting…'}
+          </div>
         </div>
       </header>
 

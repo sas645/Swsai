@@ -21,6 +21,8 @@ export function useSocket(handlers) {
     socket.on('document:updated', wrap('onUpdated'));
     socket.on('document:ready', wrap('onReady'));
     socket.on('document:deleted', wrap('onDeleted'));
+    socket.on('notifications:sync', wrap('onNotificationsSync'));
+    socket.on('notification:created', wrap('onNotificationCreated'));
 
     return () => socket.disconnect();
   }, []);

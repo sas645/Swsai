@@ -58,6 +58,122 @@
   box-shadow: var(--shadow);
 }
 
+.header__right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.notif {
+  position: relative;
+}
+
+.notif__btn {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid var(--blue-100);
+  background: white;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.notif__icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.notif__badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--blue-600);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  border: 2px solid white;
+}
+
+.notif__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  width: min(420px, calc(100vw - 2rem));
+  background: white;
+  border: 1px solid var(--blue-100);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(30, 64, 175, 0.18);
+  overflow: hidden;
+  z-index: 900;
+}
+
+.notif__panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--slate-100);
+}
+
+.notif__sub {
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--slate-500);
+}
+
+.notif__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.notif__list {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.notif__empty {
+  padding: 1.25rem 1rem;
+  color: var(--slate-500);
+  font-size: 0.9rem;
+}
+
+.notif__item {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--slate-100);
+}
+
+.notif__item--unread {
+  background: linear-gradient(180deg, #ffffff, var(--blue-50));
+}
+
+.notif__item-main {
+  min-width: 0;
+}
+
+.notif__msg {
+  font-size: 0.9rem;
+  color: var(--slate-800);
+  font-weight: 600;
+}
+
+.notif__meta {
+  margin-top: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--slate-500);
+}
+
 .status-dot {
   width: 8px;
   height: 8px;

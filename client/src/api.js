@@ -87,3 +87,23 @@ export async function searchChunks(q, limit = 8) {
   if (!res.ok) throw new Error('Search failed');
   return res.json();
 }
+
+export async function fetchNotifications(limit = 50) {
+  const url = new URL(`${window.location.origin}${API_BASE}/notifications`);
+  url.searchParams.set('limit', String(limit));
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Failed to load notifications');
+  return res.json();
+}
+
+export async function markNotificationRead(id) {
+  const res = await fetch(`${API_BASE}/notifications/${id}/read`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to mark read');
+  return res.json();
+}
+
+export async function markAllNotificationsRead() {
+  const res = await fetch(`${API_BASE}/notifications/read-all`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to mark all read');
+  return res.json();
+}

@@ -24,6 +24,8 @@ export function initDb() {
     )
   `);
 
+  ensureColumn(db, 'documents', 'batch_id', 'TEXT');
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS document_chunks (
       id TEXT PRIMARY KEY,
@@ -39,17 +41,24 @@ export function initDb() {
   `);
 
   // Full-text search index for fast lexical retrieval (baseline RAG)
-  // If an older virtual-table schema exists, rebuild it.
-  const existingFts = db
-    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'document_chunks_fts'`)
-    .get();
-  if (existingFts) {
-    db.exec(`DROP TABLE IF EXISTS document_chunks_fts;`);
-  }
   db.exec(`
-    CREATE VIRTUAL TABLE document_chunks_fts
+    CREATE VIRTUAL TABLE IF NOT EXISTS document_chunks_fts
     USING fts5(text, doc_id, chunk_index, chunk_id);
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      message TEXT NOT NULL,
+      type TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      read INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+    CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
+  `);
+  ensureColumn(db, 'notifications', 'dedupe_key', 'TEXT');
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe_key ON notifications(dedupe_key)`);
 
   return db;
 }
@@ -67,5 +76,14 @@ export function rowToDoc(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     errorMessage: row.error_message,
+    batchId: row.batch_id || null,
   };
+}
+
+function ensureColumn(db, table, column, typeSql) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  const has = cols.some((c) => c.name === column);
+  if (!has) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${typeSql}`);
+  }
 }
