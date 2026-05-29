@@ -2,7 +2,7 @@ import path from 'path';
 import { extractPdfText, chunkText, storeChunks } from './rag.js';
 
 const STEPS = [
-  { label: 'Validating PDF structure', pct: 12 },
+  { label: 'Validating document', pct: 12 },
   { label: 'Extracting text', pct: 40 },
   { label: 'Chunking & indexing', pct: 75 },
   { label: 'Finalizing document', pct: 100 },
@@ -12,9 +12,9 @@ export async function processDocument(db, docId, filePath, emit, notify) {
   try {
     await setStep(db, docId, emit, STEPS[0].label, 5);
 
-    // Basic validation: file exists & is a PDF by extension
-    if (!filePath?.toLowerCase().endsWith('.pdf')) {
-      throw new Error('Uploaded file is not a PDF.');
+    // Accept any file type - processor will attempt to extract text
+    if (!filePath) {
+      throw new Error('No file path provided.');
     }
 
     await setStep(db, docId, emit, STEPS[0].label, STEPS[0].pct);
