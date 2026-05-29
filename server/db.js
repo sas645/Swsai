@@ -24,6 +24,33 @@ export function initDb() {
     )
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS document_chunks (
+      id TEXT PRIMARY KEY,
+      doc_id TEXT NOT NULL,
+      chunk_index INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      char_count INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_document_chunks_doc_id ON document_chunks(doc_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_document_chunks_doc_chunk ON document_chunks(doc_id, chunk_index);
+  `);
+
+  // Full-text search index for fast lexical retrieval (baseline RAG)
+  // If an older virtual-table schema exists, rebuild it.
+  const existingFts = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'document_chunks_fts'`)
+    .get();
+  if (existingFts) {
+    db.exec(`DROP TABLE IF EXISTS document_chunks_fts;`);
+  }
+  db.exec(`
+    CREATE VIRTUAL TABLE document_chunks_fts
+    USING fts5(text, doc_id, chunk_index, chunk_id);
+  `);
+
   return db;
 }
 

@@ -8,7 +8,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { initDb, rowToDoc } from './db.js';
-import { simulateProcessing } from './processor.js';
+import { processDocument } from './processor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -74,6 +74,34 @@ app.get('/api/documents/:id', (req, res) => {
   res.json(rowToDoc(row));
 });
 
+// Baseline RAG (lexical): returns best matching chunks + source docs
+app.get('/api/search', (req, res) => {
+  const q = (req.query.q || '').toString();
+  const limit = Math.min(25, Math.max(1, Number.parseInt(req.query.limit || '8', 10) || 8));
+  if (!q.trim()) return res.json({ query: q, results: [] });
+
+  // Lazy import to avoid circulars at startup
+  // eslint-disable-next-line no-undef
+  import('./rag.js').then(({ searchChunksLexical }) => {
+    const chunks = searchChunksLexical(db, q, { limit });
+    const docIds = [...new Set(chunks.map((c) => c.docId))];
+    const docsById = new Map(
+      db
+        .prepare(`SELECT * FROM documents WHERE id IN (${docIds.map(() => '?').join(',') || "''"})`)
+        .all(...docIds)
+        .map((r) => [r.id, rowToDoc(r)])
+    );
+
+    res.json({
+      query: q,
+      results: chunks.map((c) => ({
+        ...c,
+        document: docsById.get(c.docId) || null,
+      })),
+    });
+  }).catch((e) => res.status(500).json({ error: e.message || 'Search failed' }));
+});
+
 app.post('/api/documents/upload', upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -114,7 +142,8 @@ app.post('/api/documents/upload', upload.single('file'), (req, res) => {
   emit('document:updated', saved);
 
   res.status(201).json(saved);
-  simulateProcessing(db, id, emit);
+  const filePath = path.join(uploadsDir, saved.filename);
+  processDocument(db, id, filePath, emit);
 });
 
 app.delete('/api/documents/:id', (req, res) => {

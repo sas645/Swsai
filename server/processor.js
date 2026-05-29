@@ -1,47 +1,53 @@
-const PROCESSING_STEPS = [
-  { label: 'Validating PDF structure', weight: 15 },
-  { label: 'Extracting metadata', weight: 20 },
-  { label: 'Indexing text content', weight: 35 },
-  { label: 'Generating preview', weight: 20 },
-  { label: 'Finalizing document', weight: 10 },
+import path from 'path';
+import { extractPdfText, chunkText, storeChunks } from './rag.js';
+
+const STEPS = [
+  { label: 'Validating PDF structure', pct: 12 },
+  { label: 'Extracting text', pct: 40 },
+  { label: 'Chunking & indexing', pct: 75 },
+  { label: 'Finalizing document', pct: 100 },
 ];
 
-export function simulateProcessing(db, docId, emit) {
-  let progress = 0;
-  let stepIndex = 0;
+export async function processDocument(db, docId, filePath, emit) {
+  try {
+    await setStep(db, docId, emit, STEPS[0].label, 5);
 
-  const tick = () => {
-    const step = PROCESSING_STEPS[stepIndex];
-    if (!step) {
-      const now = new Date().toISOString();
-      db.prepare(
-        `UPDATE documents SET status = 'ready', processing_progress = 100, updated_at = ? WHERE id = ?`
-      ).run(now, docId);
-
-      const doc = getDoc(db, docId);
-      emit('document:updated', doc);
-      emit('document:ready', { ...doc, message: `"${doc.originalName}" is ready to view.` });
-      return;
+    // Basic validation: file exists & is a PDF by extension
+    if (!filePath?.toLowerCase().endsWith('.pdf')) {
+      throw new Error('Uploaded file is not a PDF.');
     }
 
-    progress += 2 + Math.floor(Math.random() * 4);
-    const stepCap = PROCESSING_STEPS.slice(0, stepIndex + 1).reduce((s, x) => s + x.weight, 0);
-    if (progress >= stepCap) {
-      stepIndex += 1;
-    }
+    await setStep(db, docId, emit, STEPS[0].label, STEPS[0].pct);
 
-    const capped = Math.min(progress, 99);
+    await setStep(db, docId, emit, STEPS[1].label, 20);
+    const text = await extractPdfText(filePath);
+    await setStep(db, docId, emit, STEPS[1].label, STEPS[1].pct);
+
+    await setStep(db, docId, emit, STEPS[2].label, 55);
+    const chunks = chunkText(text);
+    storeChunks(db, docId, chunks);
+    await setStep(db, docId, emit, STEPS[2].label, STEPS[2].pct);
+
+    // Placeholder: embeddings step will be inserted here in the next task.
+    await setStep(db, docId, emit, STEPS[3].label, 95);
+
     const now = new Date().toISOString();
     db.prepare(
-      `UPDATE documents SET processing_progress = ?, updated_at = ? WHERE id = ?`
-    ).run(capped, now, docId);
+      `UPDATE documents SET status = 'ready', processing_progress = 100, updated_at = ? WHERE id = ?`
+    ).run(now, docId);
 
     const doc = getDoc(db, docId);
-    emit('document:updated', { ...doc, processingStep: step.label });
-    setTimeout(tick, 400 + Math.random() * 600);
-  };
-
-  setTimeout(tick, 500);
+    emit('document:updated', doc);
+    emit('document:ready', { ...doc, message: `"${doc.originalName}" is ready to view.` });
+  } catch (err) {
+    const now = new Date().toISOString();
+    db.prepare(
+      `UPDATE documents SET status = 'error', error_message = ?, updated_at = ? WHERE id = ?`
+    ).run(err?.message || 'Processing failed', now, docId);
+    const doc = getDoc(db, docId);
+    emit('document:updated', doc);
+    emit('document:ready', { ...doc, message: `"${doc.originalName}" failed to process.` });
+  }
 }
 
 function getDoc(db, id) {
@@ -60,4 +66,19 @@ function getDoc(db, id) {
         errorMessage: row.error_message,
       }
     : null;
+}
+
+async function setStep(db, docId, emit, label, pct) {
+  const capped = Math.max(0, Math.min(99, pct));
+  const now = new Date().toISOString();
+  db.prepare(
+    `UPDATE documents SET processing_progress = ?, updated_at = ? WHERE id = ?`
+  ).run(capped, now, docId);
+  const doc = getDoc(db, docId);
+  emit('document:updated', { ...doc, processingStep: label });
+  await sleep(250 + Math.random() * 450);
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
 }
