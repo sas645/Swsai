@@ -1,4 +1,4 @@
-# Document Management Dashboard
+# Swsai — Document Management Dashboard
 
 Full-stack prototype for uploading company PDFs, tracking upload progress in real time, and receiving notifications when background processing completes.
 
