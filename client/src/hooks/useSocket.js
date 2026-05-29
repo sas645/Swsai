@@ -14,6 +14,8 @@ export function useSocket(handlers) {
       handlersRef.current?.[event]?.(payload);
     };
 
+    socket.on('connect', () => handlersRef.current?.onConnect?.());
+    socket.on('disconnect', () => handlersRef.current?.onDisconnect?.());
     socket.on('documents:sync', wrap('onSync'));
     socket.on('document:created', wrap('onCreated'));
     socket.on('document:updated', wrap('onUpdated'));

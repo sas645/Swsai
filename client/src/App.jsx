@@ -39,9 +39,10 @@ export default function App() {
   }, []);
 
   useSocket({
+    onConnect: () => setConnected(true),
+    onDisconnect: () => setConnected(false),
     onSync: (docs) => {
       setDocuments(docs);
-      setConnected(true);
       setLoading(false);
     },
     onCreated: (doc) => setDocuments((prev) => upsertDoc(prev, doc)),
