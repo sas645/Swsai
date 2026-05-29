@@ -1,3 +1,4 @@
+import { useId, useState } from 'react';
 import ProgressBar from './ProgressBar';
 
 function formatBytes(bytes) {
@@ -25,8 +26,11 @@ const STATUS = {
 };
 
 export default function DocumentCard({ doc, onDelete, deleting }) {
+  const [showDetails, setShowDetails] = useState(false);
+  const detailsId = useId();
   const status = STATUS[doc.status] || STATUS.processing;
   const isProcessing = doc.status === 'processing' || doc.status === 'uploaded';
+  const canOpenPdf = !!doc.filename && (doc.status === 'ready' || doc.status === 'processing' || doc.status === 'error');
 
   return (
     <article className="doc-card card">
@@ -77,6 +81,27 @@ export default function DocumentCard({ doc, onDelete, deleting }) {
       <div className="doc-card__actions">
         <button
           type="button"
+          className="btn btn--ghost"
+          aria-expanded={showDetails}
+          aria-controls={detailsId}
+          onClick={() => setShowDetails((v) => !v)}
+        >
+          {showDetails ? 'Hide details' : 'View details'}
+        </button>
+
+        {canOpenPdf && (
+          <a
+            className="btn btn--ghost"
+            href={`/uploads/${doc.filename}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open PDF
+          </a>
+        )}
+
+        <button
+          type="button"
           className="btn btn--ghost btn--danger"
           onClick={() => onDelete(doc.id)}
           disabled={deleting}
@@ -84,6 +109,28 @@ export default function DocumentCard({ doc, onDelete, deleting }) {
           {deleting ? 'Removing…' : 'Remove'}
         </button>
       </div>
+
+      {showDetails && (
+        <div id={detailsId} className="doc-card__details" role="region" aria-label="Document details">
+          <div className="doc-card__details-grid">
+            <Field label="Document ID" value={doc.id} mono />
+            <Field label="Stored filename" value={doc.filename || '—'} mono />
+            <Field label="Status" value={doc.status} />
+            <Field label="Created at" value={doc.createdAt ? formatDate(doc.createdAt) : '—'} />
+            <Field label="Updated at" value={doc.updatedAt ? formatDate(doc.updatedAt) : '—'} />
+            {doc.errorMessage && <Field label="Error" value={doc.errorMessage} />}
+          </div>
+        </div>
+      )}
     </article>
+  );
+}
+
+function Field({ label, value, mono = false }) {
+  return (
+    <div className="doc-field">
+      <div className="doc-field__label">{label}</div>
+      <div className={`doc-field__value ${mono ? 'doc-field__value--mono' : ''}`}>{value}</div>
+    </div>
   );
 }

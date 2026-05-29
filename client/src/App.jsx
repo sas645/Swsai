@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { deleteDocument, fetchDocuments, uploadDocument } from './api';
+import { deleteDocument, fetchDocuments, uploadDocumentWithMeta } from './api';
 import DocumentCard from './components/DocumentCard';
 import NotificationToast from './components/NotificationToast';
 import UploadZone from './components/UploadZone';
+import UploadQueue from './components/UploadQueue';
 import { useSocket } from './hooks/useSocket';
 import './App.css';
 
@@ -19,9 +20,8 @@ function upsertDoc(list, doc) {
 export default function App() {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadFileName, setUploadFileName] = useState('');
+  const [uploadItems, setUploadItems] = useState([]);
+  const [queueMinimized, setQueueMinimized] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [connected, setConnected] = useState(false);
@@ -61,45 +61,72 @@ export default function App() {
       .finally(() => setLoading(false));
   }, [addNotification]);
 
-  const handleUpload = async (file, errorMsg) => {
-    if (errorMsg) {
-      addNotification('Invalid file', errorMsg, 'info');
-      return;
+  const handleUploadFiles = async (files) => {
+    const selected = Array.from(files || []);
+    if (!selected.length) return;
+
+    const pdfs = selected.filter((f) => f.name.toLowerCase().endsWith('.pdf'));
+    const rejected = selected.length - pdfs.length;
+    if (rejected) addNotification('Some files skipped', 'Only PDF files can be uploaded.', 'info');
+    if (!pdfs.length) return;
+
+    const batchId = pdfs.length > 3 ? `batch-${Date.now()}` : null;
+    if (batchId) {
+      addNotification('Upload in progress', `Processing ${pdfs.length} files in background.`, 'info');
+      setQueueMinimized(true);
     }
-    setUploading(true);
-    setUploadProgress(0);
-    setUploadFileName(file.name);
 
-    const tempId = `temp-${Date.now()}`;
-    const placeholder = {
-      id: tempId,
-      originalName: file.name,
-      fileSize: file.size,
-      status: 'uploading',
-      uploadProgress: 0,
-      processingProgress: 0,
-      createdAt: new Date().toISOString(),
-    };
-    setDocuments((prev) => [placeholder, ...prev]);
+    const newItems = pdfs.map((file) => ({
+      localId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      status: 'pending',
+      progress: 0,
+      file,
+    }));
+    setUploadItems((prev) => [...newItems, ...prev]);
 
-    try {
-      const doc = await uploadDocument(file, (pct) => {
-        setUploadProgress(pct);
-        setDocuments((prev) =>
-          prev.map((d) => (d.id === tempId ? { ...d, uploadProgress: pct } : d))
+    // Upload sequentially (simpler and more stable); can be upgraded to limited concurrency later.
+    for (const item of newItems) {
+      setUploadItems((prev) =>
+        prev.map((x) => (x.localId === item.localId ? { ...x, status: 'uploading', progress: 0 } : x))
+      );
+
+      try {
+        const doc = await uploadDocumentWithMeta({
+          file: item.file,
+          batchId,
+          onProgress: (pct) => {
+            setUploadItems((prev) =>
+              prev.map((x) => (x.localId === item.localId ? { ...x, progress: pct } : x))
+            );
+          },
+        });
+
+        setUploadItems((prev) =>
+          prev.map((x) => (x.localId === item.localId ? { ...x, status: 'complete', progress: 100 } : x))
         );
-      });
-      setDocuments((prev) => prev.filter((d) => d.id !== tempId));
-      setDocuments((prev) => upsertDoc(prev, doc));
-      addNotification('Upload complete', `"${file.name}" uploaded. Processing started.`);
-    } catch (err) {
-      setDocuments((prev) => prev.filter((d) => d.id !== tempId));
-      addNotification('Upload failed', err.message, 'info');
-    } finally {
-      setUploading(false);
-      setUploadProgress(0);
-      setUploadFileName('');
+        setDocuments((prev) => upsertDoc(prev, doc));
+
+        if (!batchId) {
+          addNotification('Upload complete', `"${item.name}" uploaded. Processing started.`);
+        }
+      } catch (err) {
+        setUploadItems((prev) =>
+          prev.map((x) =>
+            x.localId === item.localId
+              ? { ...x, status: 'failed', error: err.message, progress: x.progress || 0 }
+              : x
+          )
+        );
+        addNotification('Upload failed', `${item.name}: ${err.message}`, 'info');
+      }
     }
+  };
+
+  const clearDone = () => {
+    setUploadItems((prev) => prev.filter((i) => i.status === 'uploading' || i.status === 'pending'));
   };
 
   const handleDelete = async (id) => {
@@ -135,10 +162,15 @@ export default function App() {
 
       <main className="main">
         <UploadZone
-          onUpload={handleUpload}
-          uploading={uploading}
-          uploadProgress={uploadProgress}
-          uploadFileName={uploadFileName}
+          onUploadFiles={handleUploadFiles}
+          disabled={false}
+        />
+
+        <UploadQueue
+          items={uploadItems}
+          minimized={queueMinimized}
+          onToggleMinimized={() => setQueueMinimized((v) => !v)}
+          onClearCompleted={clearDone}
         />
 
         <section className="stats">
