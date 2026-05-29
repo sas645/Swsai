@@ -1,0 +1,46 @@
+const API_BASE = '/api';
+
+export async function fetchDocuments() {
+  const res = await fetch(`${API_BASE}/documents`);
+  if (!res.ok) throw new Error('Failed to load documents');
+  return res.json();
+}
+
+export function uploadDocument(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText));
+      } else {
+        let message = 'Upload failed';
+        try {
+          const err = JSON.parse(xhr.responseText);
+          message = err.error || message;
+        } catch {
+          /* ignore */
+        }
+        reject(new Error(message));
+      }
+    });
+
+    xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+    xhr.open('POST', `${API_BASE}/documents/upload`);
+    xhr.send(formData);
+  });
+}
+
+export async function deleteDocument(id) {
+  const res = await fetch(`${API_BASE}/documents/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete document');
+  return res.json();
+}
