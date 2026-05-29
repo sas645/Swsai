@@ -37,7 +37,6 @@ export default function UploadZone({ onUploadFiles, disabled }) {
         <input
           ref={inputRef}
           type="file"
-          accept="application/pdf,.pdf"
           multiple
           hidden
           disabled={disabled}
@@ -56,9 +55,9 @@ export default function UploadZone({ onUploadFiles, disabled }) {
             </svg>
           )}
         </div>
-        <h2>{disabled ? 'Uploading documents…' : 'Upload company PDFs'}</h2>
+        <h2>{disabled ? 'Uploading documents…' : 'Upload documents'}</h2>
         <p>
-          Drag and drop PDFs here, or click to browse. You can select multiple files. Max 50 MB each.
+          Drag and drop files here, or click to browse. You can select multiple files. Max 50 MB each.
         </p>
       </div>
     </section>
